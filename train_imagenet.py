@@ -53,6 +53,8 @@ parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
 parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                     help='use pre-trained model')
+parser.add_argument('--single_gpu', dest='single_gpu', action='store_true', default=False)
+parser.add_argument('--multicrop', action='store_true', default=False)
 
 best_prec1 = 0
 
@@ -72,10 +74,11 @@ def main():
         model = models.__dict__[args.arch]()
 
     if args.arch.startswith('alexnet') or args.arch.startswith('vgg') or args.arch in ['pvanet']:
-        model.features = torch.nn.DataParallel(model.features)
+        # Even if only one gpu is used, create a DataParallel instance (consistency)
+        model.features = torch.nn.DataParallel(model.features, device_ids=[0] if args.single_gpu else None)
         model.cuda()
     else:
-        model = torch.nn.DataParallel(model).cuda()
+        model = torch.nn.DataParallel(model, device_ids=[0] if args.single_gpu else None).cuda()
 
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
@@ -127,7 +130,7 @@ def main():
         num_workers=args.workers, pin_memory=True)
 
     if args.evaluate:
-        validate(val_loader, model, criterion)
+        validate(val_loader, model, criterion, multiple_crops=args.multicrop)
         return
 
     for epoch in range(args.start_epoch, args.epochs):
@@ -163,6 +166,14 @@ def train(train_loader, model, criterion, optimizer, epoch):
 
     end = time.time()
     for i, (input, target) in enumerate(train_loader):
+        # Initial warming-up
+        if epoch == 0 and i == 0:
+            print "Temporarily lowered LR"
+            adjust_learning_rate(optimizer, 120)
+        if epoch == 0 and i == 1000:
+            print "Recover LR"
+            adjust_learning_rate(optimizer, 0)
+
         # measure data loading time
         data_time.update(time.time() - end)
 
@@ -200,11 +211,15 @@ def train(train_loader, model, criterion, optimizer, epoch):
                    data_time=data_time, loss=losses, top1=top1, top5=top5))
 
 
-def validate(val_loader, model, criterion):
+def validate(val_loader, model, criterion, multiple_crops=False):
     batch_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
     top5 = AverageMeter()
+
+    if multiple_crops:
+        # XXX: Loss outputs are not valid (due to duplicated softmax)
+        model = MultiCropEnsemble(model, 224, act=nn.functional.softmax)
 
     # switch to evaluate mode
     model.eval()
@@ -270,7 +285,7 @@ class AverageMeter(object):
 
 def adjust_learning_rate(optimizer, epoch):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-    lr = args.lr * (0.1 ** (epoch // 30))
+    lr = args.lr * (0.3163 ** (epoch // 30))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 

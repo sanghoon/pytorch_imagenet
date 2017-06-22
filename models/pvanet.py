@@ -131,7 +131,7 @@ class Inception(nn.Module):
         self.in_stride = in_stride
 
         self.n_branches = 0
-        self.n_outs = []
+        self.n_outs = []        # number of output feature for each branch
 
         self.proj = nn.Conv2d(n_in, n_out, 1, stride=in_stride) if proj else None
 
