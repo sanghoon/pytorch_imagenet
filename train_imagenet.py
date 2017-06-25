@@ -41,6 +41,8 @@ parser.add_argument('-b', '--batch-size', default=256, type=int,
                     metavar='N', help='mini-batch size (default: 256)')
 parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
                     metavar='LR', help='initial learning rate')
+parser.add_argument('--gamma', default=0.1, type=float,
+                        help='LR decay rate')
 parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                     help='momentum')
 parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
@@ -285,7 +287,7 @@ class AverageMeter(object):
 
 def adjust_learning_rate(optimizer, epoch):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-    lr = args.lr * (0.3163 ** (epoch // 30))
+    lr = args.lr * (args.gamma ** (epoch // 30))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 

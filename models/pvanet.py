@@ -243,8 +243,58 @@ class Inception(nn.Module):
         return x
 
 
-# Define network
-class PVANet(nn.Module):
+# This class is impl. separately so that we can modify feature extraction codes for OD models
+class PVANetFeat(nn.Module):
+    # This class is im
+    def __init__(self):
+        super(PVANetFeat, self).__init__()
+
+        self.conv1 = nn.Sequential(
+            mCReLU_base(3, 16, kernelsize=7, stride=2, lastAct=False),
+            nn.MaxPool2d(3, padding=1, stride=2)
+        )
+
+        # 1/4
+        self.conv2 = nn.Sequential(
+            mCReLU_residual(32, 24, 24, 64, kernelsize=3, preAct=True, lastAct=False, in_stride=1, proj=True),
+            mCReLU_residual(64, 24, 24, 64, kernelsize=3, preAct=True, lastAct=False),
+            mCReLU_residual(64, 24, 24, 64, kernelsize=3, preAct=True, lastAct=False)
+        )
+
+        # 1/8
+        self.conv3 = nn.Sequential(
+            mCReLU_residual(64, 48, 48, 128, kernelsize=3, preAct=True, lastAct=False, in_stride=2, proj=True),
+            mCReLU_residual(128, 48, 48, 128, kernelsize=3, preAct=True, lastAct=False),
+            mCReLU_residual(128, 48, 48, 128, kernelsize=3, preAct=True, lastAct=False),
+            mCReLU_residual(128, 48, 48, 128, kernelsize=3, preAct=True, lastAct=False)
+        )
+
+        # 1/16
+        self.conv4 = nn.Sequential(
+            self.gen_InceptionA(128, 2, True),
+            self.gen_InceptionA(256, 1, False),
+            self.gen_InceptionA(256, 1, False),
+            self.gen_InceptionA(256, 1, False)
+        )
+
+        # 1/32
+        self.conv5 = nn.Sequential(
+            self.gen_InceptionB(256, 2, True),
+            self.gen_InceptionB(384, 1, False),
+            self.gen_InceptionB(384, 1, False),
+            self.gen_InceptionB(384, 1, False),
+
+            nn.ReLU(inplace=True)
+        )
+
+    def forward(self, x):
+        x0 = self.conv1(x)
+        x1 = self.conv2(x0)         # 1/4 feature
+        x2 = self.conv3(x1)         # 1/8
+        x3 = self.conv4(x2)         # 1/16
+        x4 = self.conv5(x3)         # 1/32
+
+        return x4
 
     def gen_InceptionA(self, n_in, stride=1, poolconv=False, n_out=256):
         if (n_in != n_out) or (stride > 1):
@@ -278,39 +328,14 @@ class PVANet(nn.Module):
 
         return module.finalize()
 
+
+# Define network
+class PVANet(nn.Module):
     def __init__(self, inputsize=224, num_classes=1000):
         super(PVANet, self).__init__()
 
         # Follows torchvision naming convention
-        self.features = nn.Sequential(
-            mCReLU_base(3, 16, kernelsize=7, stride=2, lastAct=False),
-            nn.MaxPool2d(3, padding=1, stride=2),
-
-            # 1/4
-            mCReLU_residual(32, 24, 24, 64, kernelsize=3, preAct=True, lastAct=False, in_stride=1, proj=True),
-            mCReLU_residual(64, 24, 24, 64, kernelsize=3, preAct=True, lastAct=False),
-            mCReLU_residual(64, 24, 24, 64, kernelsize=3, preAct=True, lastAct=False),
-
-            # 1/8
-            mCReLU_residual(64, 48, 48, 128, kernelsize=3, preAct=True, lastAct=False, in_stride=2, proj=True),
-            mCReLU_residual(128, 48, 48, 128, kernelsize=3, preAct=True, lastAct=False),
-            mCReLU_residual(128, 48, 48, 128, kernelsize=3, preAct=True, lastAct=False),
-            mCReLU_residual(128, 48, 48, 128, kernelsize=3, preAct=True, lastAct=False),
-
-            # 1/16
-            self.gen_InceptionA(128, 2, True),
-            self.gen_InceptionA(256, 1, False),
-            self.gen_InceptionA(256, 1, False),
-            self.gen_InceptionA(256, 1, False),
-
-            # 1/32
-            self.gen_InceptionB(256, 2, True),
-            self.gen_InceptionB(384, 1, False),
-            self.gen_InceptionB(384, 1, False),
-            self.gen_InceptionB(384, 1, False),
-
-            nn.ReLU(inplace=True)
-        )
+        self.features = PVANetFeat()
 
         assert (inputsize % 32 == 0)
         featsize = inputsize / 32
@@ -332,7 +357,6 @@ class PVANet(nn.Module):
 
         # Initialize all vars.
         initvars(self.modules())
-
 
     def forward(self, x):
         x = self.features(x)
