@@ -244,6 +244,7 @@ class Inception(nn.Module):
 
 
 # This class is impl. separately so that we can modify feature extraction codes for OD models
+# (e.g. concatenating three intermediate outputs at different scales)
 class PVANetFeat(nn.Module):
     # This class is im
     def __init__(self):
