@@ -1,5 +1,10 @@
 # PyTorch Image Classification
 
+> ⚠️ **Notice: Unmaintained Repository**
+> 
+> Please note that this repository is no longer actively maintained. New pull requests and issues will not be reviewed.
+
+
 - PyTorch models for imagenet classification.
 - These models can be utilized as pre-training models for other computer vision tasks.
 
